@@ -326,13 +326,13 @@ def main():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.image("./assets/Career1.jpg")
+        st.image("./assets/career1.jpg")
 
     with col2:
         st.image("./assets/career-path.png")
 
     with col3:
-        st.image("./assets/career _outline.png")
+        st.image("./assets/Career _Outline.png")
 
     html2 = """
     <div style="text-align:center; text-shadow: 3px 1px 2px blue;">
