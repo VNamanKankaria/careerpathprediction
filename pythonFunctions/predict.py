@@ -1,47 +1,48 @@
-import sys
-import pickle
+# predict.py
+
+import pandas as pd
 import numpy as np
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score
 
-file1 = open('./model1.pkl', 'rb')
-clf1 = pickle.load(file1)
-file1.close()
+# Load and clean dataset
+df = pd.read_csv("data/mldata.csv")
+df = df.dropna()
 
-file2 = open('./model2.pkl', 'rb')
-clf2 = pickle.load(file2)
-file2.close()
+# Encode target
+df['Result'] = df['Result'].astype('category')
+y = df['Result'].cat.codes
+X = df.drop(columns=['Result'])
 
-file3 = open('./model3.pkl', 'rb')
-clf3 = pickle.load(file3)
-file3.close()
+# Encode categorical features
+for col in X.select_dtypes(include='object').columns:
+    le = LabelEncoder()
+    X[col] = le.fit_transform(X[col].astype(str))
 
-file4 = open('./model4.pkl', 'rb')
-clf4 = pickle.load(file4)
-file4.close()
+# Train/Test Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42)
 
+# Train models
+rf_model = RandomForestClassifier(class_weight='balanced')
+svm_model = SVC(class_weight='balanced', probability=True)
+xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss')
 
-userdata = [[sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10], sys.argv[11], sys.argv[12], sys.argv[13], sys.argv[14], sys.argv[15], sys.argv[16], sys.argv[17], sys.argv[18], sys.argv[19],sys.argv[20],sys.argv[21] ]]
+rf_model.fit(X_train, y_train)
+svm_model.fit(X_train, y_train)
+xgb_model.fit(X_train, y_train)
 
-# Prediction By Decision Tree
-print(clf1.predict(userdata)) 
-classprobs1 = clf1.predict_proba(userdata)
-predclassprob1 = np.max(classprobs1)
+# Evaluate
+print("RandomForest:", accuracy_score(y_test, rf_model.predict(X_test)))
+print("SVM:", accuracy_score(y_test, svm_model.predict(X_test)))
+print("XGBoost:", accuracy_score(y_test, xgb_model.predict(X_test)))
 
-# Prediction By SVM
-print(clf2.predict(userdata)) 
-classprobs2 = clf2.decision_function(userdata)
-predclassprob2 = np.max(classprobs2)
-
-# Prediction By Random Forest
-print(clf3.predict(userdata)) 
-classprobs3 = clf3.predict_proba(userdata)
-predclassprob3 = np.max(classprobs3)
-
-# Prediction By XGBoost
-print(clf4.predict(userdata)) 
-classprobs4 = clf4.predict_proba(userdata)
-predclassprob4 = np.max(classprobs4)
-
-print(predclassprob1)
-print(predclassprob2)
-print(predclassprob3)
-print(predclassprob4)
+# Save models
+joblib.dump(rf_model, 'models/rf_model.pkl')
+joblib.dump(svm_model, 'models/svm_model.pkl')
+joblib.dump(xgb_model, 'models/xgb_model.pkl')

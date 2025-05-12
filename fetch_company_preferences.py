@@ -20,8 +20,8 @@ company_type_weights = {
 }
 
 def classify_company_type(job_title, job_type):
-    job_title = job_title.lower()
-    job_type = job_type.lower()
+    job_title = job_title.lower() if job_title else "Senior Software Engineer"
+    job_type = job_type.lower() if job_type else "developer"
 
     matched_types = []
 

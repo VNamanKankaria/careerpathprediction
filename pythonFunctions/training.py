@@ -1,108 +1,96 @@
-#Importing Libraries
-import sys
+import sqlite3
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn import tree, svm
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import confusion_matrix,accuracy_score
+from sklearn.svm import SVC
 from xgboost import XGBClassifier
-import pickle
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelEncoder
+import joblib
+import os
 
 
-#Loading Dataset
-df = pd.read_csv("data/mldata.csv")
+def retrain_model():
+    # Connect to the database
+    conn = sqlite3.connect('CBRSdata.db')
+    query = "SELECT * FROM predictiontable WHERE Feedback = 'Satisfied'"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
 
+    if df.empty:
+        print("No rows with 'Satisfied' feedback found. Skipping model retraining.")
+        return
 
-# Number Encoding
-cols = df[["self-learning capability?", "Extra-courses did","Taken inputs from seniors or elders", "worked in teams ever?", "Introvert"]]
-for i in cols:
-    cleanup_nums = {i: {"yes": 1, "no": 0}}
-    df = df.replace(cleanup_nums)
-   
+    # Drop unnecessary columns
+    df = df.drop(columns=['name', 'contact', 'email',
+                 'Feedback'], errors='ignore')
 
-mycol = df[["reading and writing skills", "memory capability score"]]
-for i in mycol:
-    cleanup_nums = {i: {"poor": 0, "medium": 1, "excellent": 2}}
-    df = df.replace(cleanup_nums)
+    # Ensure 'Result' exists
+    if 'Result' not in df.columns:
+        raise ValueError("The 'Result' column is missing in the data.")
 
+    # Encode target column
+    df['Result'] = df['Result'].astype('category').cat.codes
 
-# Label Encoding
-category_cols = df[['certifications', 'workshops', 'Interested subjects', 'interested career area ', 'Type of company want to settle in?', 
-                    'Interested Type of Books']]
-for i in category_cols:
-    df[i] = df[i].astype('category')
-    df[i + "_code"] = df[i].cat.codes
+    # Separate features and target
+    X = df.drop(columns=['Result'])
+    y = df['Result']
 
+    # Replace empty strings with NaN
+    X = X.replace('', np.nan)
 
-# Dummy Variable Encoding
-df = pd.get_dummies(df, columns=["Management or Technical", "hard/smart worker"], prefix=["A", "B"])
+    # Convert all columns to numeric where possible
+    X = X.apply(pd.to_numeric, errors='coerce')
 
+    # Fill missing values
+    label_encoders = {}
+    for col in X.columns:
+        if pd.api.types.is_numeric_dtype(X[col]):
+            X[col] = X[col].fillna(X[col].mean())
+        else:
+            X[col] = X[col].fillna(X[col].mode()[0])
+            le = LabelEncoder()
+            X[col] = le.fit_transform(X[col])
+            label_encoders[col] = le
 
-# Building Model
-feed = df[['Logical quotient rating', 'coding skills rating', 'hackathons', 'public speaking points', 'self-learning capability?','Extra-courses did', 
-           'Taken inputs from seniors or elders', 'worked in teams ever?', 'Introvert', 'reading and writing skills', 'memory capability score',  
-           'B_hard worker', 'B_smart worker', 'A_Management', 'A_Technical', 'Interested subjects_code', 'Interested Type of Books_code', 'certifications_code', 
-           'workshops_code', 'Type of company want to settle in?_code',  'interested career area _code',
-             'Suggested Job Role']]
+    # Final check for missing values
+    if X.isnull().sum().sum() > 0:
+        print("Warning: NaNs still present in X.")
+        print(X.isnull().sum())
+        raise ValueError(
+            "Missing values still exist in X after preprocessing.")
 
+    # Align target with input
+    y = y.loc[X.index]
 
-# Taking all independent variable columns
-df_train_x = feed.drop('Suggested Job Role',axis = 1)
+    # Split dataset
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42)
 
-# Target variable column
-df_train_y = feed['Suggested Job Role']
+    # Define models
+    rf_model = RandomForestClassifier(class_weight='balanced')
+    svm_model = SVC(class_weight='balanced', probability=True)
+    xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss')
 
-# Train-Test Splitting
-x_train, x_test, y_train, y_test = train_test_split(df_train_x, df_train_y, test_size=0.20, random_state=42)
+    # Train models
+    rf_model.fit(X_train, y_train)
+    svm_model.fit(X_train, y_train)
+    xgb_model.fit(X_train, y_train)
 
+    # Accuracy
+    print("RandomForest Accuracy:", accuracy_score(
+        y_test, rf_model.predict(X_test)))
+    print("SVM Accuracy:", accuracy_score(y_test, svm_model.predict(X_test)))
+    print("XGBoost Accuracy:", accuracy_score(
+        y_test, xgb_model.predict(X_test)))
 
-# Decision Tree Classifier
-clf1 = tree.DecisionTreeClassifier()
-clf1 = clf1.fit(x_train, y_train)
+    # Ensure model directory exists
+    os.makedirs('model', exist_ok=True)
 
-# SVM Classifier
-clf2 = svm.SVC()
-clf2 = clf2.fit(x_train, y_train)
+    # Save models
+    joblib.dump(rf_model, 'model/rf_model.pkl')
+    joblib.dump(svm_model, 'model/svm_model.pkl')
+    joblib.dump(xgb_model, 'model/xgb_model.pkl')
 
-
-#Random Forest Classifier
-clf3 = RandomForestClassifier(n_estimators=100) 
-clf3 = clf3.fit(x_train, y_train)
-
-#XGBoost Classifier
-clf4 = XGBClassifier(random_state = 42, learning_rate=0.02, n_estimators=300) 
-clf4 = clf3.fit(x_train, y_train)
-
-
-# feed = df[['Logical quotient rating', 'coding skills rating', 'hackathons', 'public speaking points', 'self-learning capability?','Extra-courses did', 
-#            'Taken inputs from seniors or elders', 'worked in teams ever?', 'Introvert', 'reading and writing skills', 'memory capability score',  
-#            'B_hard worker', 'B_smart worker', 'A_Management', 'A_Technical', 'Interested subjects_code', 'Interested Type of Books_code', 'certifications_code', 
-#            'workshops_code', 'Type of company want to settle in?_code',  'interested career area _code',
-#              'Suggested Job Role']]
-
-
-# Decision Tree Model
-file1 = open('pkl/model1.pkl', 'wb') 
-pickle.dump(clf1, file1)
-file1.close()
-
-# SVM Model
-file2 = open('pkl/model2.pkl', 'wb') 
-pickle.dump(clf2, file2)
-file2.close()
-
-# Random Forest Model
-file3 = open('pkl/model3.pkl', 'wb') 
-pickle.dump(clf3, file3)
-file3.close()
-
-# XGBoost Model
-file4 = open('pkl/model4.pkl', 'wb') 
-pickle.dump(clf4, file4)
-file4.close()
-
-
-print("All Model Building Done!")
-
-
+    print("Models saved successfully.")

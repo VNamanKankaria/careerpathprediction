@@ -5,7 +5,7 @@ def get_suggested_roles():
     """Fetch and return a trending job title from the API."""
     url = "https://jsearch.p.rapidapi.com/search"
     headers = {
-        "X-RapidAPI-Key": "cc8528df03msh5121ab607109fb9p1c2980jsnf1200305560e",
+        "X-RapidAPI-Key": "5b70bfea19msh6c8af742a8261dep1f9cdcjsn887bb64e2f10",
         "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
     }
     

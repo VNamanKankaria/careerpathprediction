@@ -84,4 +84,4 @@ def update_mldata_csv():
 if __name__ == "__main__":
     while True:
         update_mldata_csv()
-        time.sleep(0.1)  # Wait for 60 seconds before adding the next row
+        time.sleep(60)  # Wait for 60 seconds before adding the next row
